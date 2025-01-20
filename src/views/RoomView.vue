@@ -67,19 +67,13 @@ async function leaveRoom() {
 // Listen for users in the room
 onSnapshot(usersRef, snapshot => {
   users.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
-});
-
-onMounted(() => {
-  const unsubscribeAuth = auth.onAuthStateChanged(user => {
-    if (user) {
+  if(users.value.length < 2) {
+    auth.onAuthStateChanged(user => {
+      if (user) {
       joinRoom(user.uid, user.displayName || 'Anonymous');
-    }
+      }
   });
-
-  // Ensure cleanup of the auth listener
-  onUnmounted(() => {
-    unsubscribeAuth();
-  });
+  }
 });
 
 onUnmounted(() => {
