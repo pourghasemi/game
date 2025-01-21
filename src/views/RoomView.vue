@@ -17,6 +17,7 @@
        <div v-if="users.length === 2">
         <Game :users="users" :roomId="roomId"/>
       </div>
+      <WarningAlert message="The room is full" :show-alert="showMessage"/>
     </div>
   </div>
 </template>
@@ -34,14 +35,15 @@ import {
 import { useRoute, useRouter } from 'vue-router';
 import type { Player } from '../types/game.ts';
 import Game from '../components/Game.vue';
-
-
+import WarningAlert from '@/components/WarningAlert.vue';
+import { getDoc } from 'firebase/firestore/lite';
 
 const route = useRoute();
 const router = useRouter();
 const roomId = route.params.id as string;
 const users = ref<Player[]>([]);
 const usersRef = collection(database, 'rooms', roomId, 'users');
+const showMessage = ref(false);
 
 async function joinRoom(userId: string, userName: string): Promise<void> {
   const roomRef = doc(database, 'rooms', roomId);
@@ -58,7 +60,7 @@ async function leaveRoom() {
       doc(database, `rooms/${roomId}/users`, currentUser.uid),
     );
     console.log(`User ${currentUser.uid} left room ${roomId}`);
-    router.push({path:'/'});
+    router.push({ path: '/' }); // Redirect to root route
   } catch (error) {
     console.error('Error leaving room: ', error);
   }
@@ -66,14 +68,32 @@ async function leaveRoom() {
 
 // Listen for users in the room
 onSnapshot(usersRef, snapshot => {
+  debugger;
   users.value = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Player));
-  if(users.value.length < 2) {
-    auth.onAuthStateChanged(user => {
-      if (user) {
-      joinRoom(user.uid, user.displayName || 'Anonymous');
+});
+
+onMounted(async () => {
+  const unsubscribeAuth = auth.onAuthStateChanged(async user => {
+    if (user) {
+      if (users.value.length < 2) {
+        console.log(users.value)
+        debugger;
+        // If the room has less than 2 users, allow joining
+        await joinRoom(user.uid, user.displayName || 'Anonymous');
+      } else {
+        // If the room is full, show the message and redirect after 5 seconds
+        showMessage.value = true;
+        setTimeout(() => {
+          router.push('/'); // Redirect to root route if the room is full
+        }, 5000);
       }
+    }
   });
-  }
+
+  // Ensure cleanup of the auth listener
+  onUnmounted(() => {
+    unsubscribeAuth();
+  });
 });
 
 onUnmounted(() => {
